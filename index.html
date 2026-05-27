@@ -1,0 +1,1498 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Lift — Training Tracker</title>
+<script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
+<style>
+:root{
+  --bg:#0d0d0d;--bg2:#161616;--bg3:#1f1f1f;--bg4:#292929;--bg5:#333;
+  --text:#efefef;--text2:#999;--text3:#555;
+  --accent:#c8f07a;--accent2:rgba(200,240,122,.15);
+  --border:rgba(255,255,255,0.07);--border2:rgba(255,255,255,0.13);--border3:rgba(255,255,255,0.2);
+  --danger:#ff6b6b;--success:#6bffa8;--warn:#ffc96b;--info:#6bb8ff;
+  --r:10px;--rl:14px;--font:'Inter',-apple-system,BlinkMacSystemFont,sans-serif;
+}
+*{box-sizing:border-box;margin:0;padding:0}
+html{scroll-behavior:smooth}
+body{font-family:var(--font);background:var(--bg);color:var(--text);min-height:100vh;line-height:1.5}
+button,input,textarea,select{font-family:var(--font)}
+a{color:inherit;text-decoration:none}
+
+/* ─── APP SHELL ─── */
+.shell{display:flex;min-height:100vh}
+.sidebar{width:240px;flex-shrink:0;background:var(--bg2);border-right:1px solid var(--border);
+  display:flex;flex-direction:column;padding:0;position:sticky;top:0;height:100vh;overflow-y:auto}
+.main{flex:1;min-width:0;padding:36px 40px;max-width:960px}
+
+/* ─── SIDEBAR ─── */
+.sb-logo{padding:20px 20px 18px;border-bottom:1px solid var(--border)}
+.sb-logo-mark{font-size:20px;font-weight:800;letter-spacing:-1px;color:var(--accent);display:flex;align-items:center;gap:6px}
+.sb-logo-sub{font-size:10px;color:var(--text3);margin-top:3px;letter-spacing:.1em;text-transform:uppercase}
+.sb-nav{padding:12px 10px;flex:1}
+.sb-label{font-size:10px;font-weight:700;color:var(--text3);text-transform:uppercase;letter-spacing:.1em;padding:0 8px;margin:12px 0 5px}
+.sb-item{display:flex;align-items:center;gap:9px;padding:8px 10px;border-radius:8px;font-size:13px;
+  color:var(--text2);cursor:pointer;transition:all .12s;border:none;background:none;width:100%;text-align:left}
+.sb-item:hover{background:var(--bg3);color:var(--text)}
+.sb-item.active{background:var(--accent2);color:var(--accent);font-weight:500}
+.sb-dot{width:6px;height:6px;border-radius:50%;background:var(--bg5);flex-shrink:0;transition:background .12s}
+.sb-item.active .sb-dot{background:var(--accent)}
+.sb-divider{height:1px;background:var(--border);margin:8px 12px}
+.sb-bottom{padding:10px 10px 16px;border-top:1px solid var(--border)}
+
+/* ─── HOME / ONBOARDING ─── */
+.home{display:flex;flex-direction:column;align-items:center;justify-content:center;min-height:calc(100vh - 72px);padding:20px}
+.home-inner{width:100%;max-width:580px}
+.home-eyebrow{font-size:11px;font-weight:700;letter-spacing:.12em;text-transform:uppercase;color:var(--accent);margin-bottom:14px}
+.home-title{font-size:36px;font-weight:800;letter-spacing:-1px;line-height:1.15;margin-bottom:10px}
+.home-sub{font-size:15px;color:var(--text2);line-height:1.65;margin-bottom:32px}
+
+.home-cards{display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-bottom:10px}
+.home-card{background:var(--bg2);border:1px solid var(--border2);border-radius:var(--rl);padding:22px;
+  cursor:pointer;transition:all .18s;text-align:left;position:relative;overflow:hidden}
+.home-card:hover{border-color:var(--border3);background:var(--bg3);transform:translateY(-1px)}
+.home-card.featured{border-color:rgba(200,240,122,.3);background:linear-gradient(135deg,rgba(200,240,122,.06) 0%,transparent 60%)}
+.home-card.featured:hover{border-color:rgba(200,240,122,.5)}
+.home-card-icon{font-size:26px;margin-bottom:12px}
+.home-card-title{font-size:15px;font-weight:700;margin-bottom:5px}
+.home-card-desc{font-size:13px;color:var(--text2);line-height:1.55}
+.home-card-arrow{position:absolute;bottom:18px;right:18px;font-size:16px;color:var(--text3)}
+.home-card.featured .home-card-arrow{color:var(--accent)}
+
+/* ─── BUILDER ─── */
+.builder{width:100%;max-width:680px}
+.builder-header{margin-bottom:32px}
+.builder-title{font-size:26px;font-weight:800;letter-spacing:-.5px;margin-bottom:6px}
+.builder-sub{font-size:14px;color:var(--text2)}
+.step-indicator{display:flex;align-items:center;gap:0;margin-bottom:36px}
+.step{display:flex;align-items:center;gap:8px;font-size:13px;color:var(--text3)}
+.step.active{color:var(--text)}
+.step.done{color:var(--success)}
+.step-num{width:24px;height:24px;border-radius:50%;border:1.5px solid var(--border2);display:flex;align-items:center;
+  justify-content:center;font-size:11px;font-weight:700;flex-shrink:0;transition:all .2s}
+.step.active .step-num{border-color:var(--accent);background:var(--accent2);color:var(--accent)}
+.step.done .step-num{border-color:var(--success);background:rgba(107,255,168,.1);color:var(--success)}
+.step-line{flex:1;height:1px;background:var(--border);margin:0 8px}
+.step-line.done{background:var(--success)}
+
+/* Step 1 */
+.field-group{margin-bottom:22px}
+.field-label{font-size:12px;font-weight:600;color:var(--text2);margin-bottom:7px;display:block;letter-spacing:.01em}
+.field-input{width:100%;background:var(--bg3);border:1px solid var(--border2);border-radius:9px;
+  padding:11px 14px;color:var(--text);font-size:14px;transition:border-color .15s}
+.field-input:focus{outline:none;border-color:var(--accent)}
+.field-input::placeholder{color:var(--text3)}
+.field-hint{font-size:11px;color:var(--text3);margin-top:5px}
+
+/* Phase chips */
+.phase-chips{display:flex;flex-wrap:wrap;gap:8px;margin-top:10px}
+.phase-chip{display:flex;align-items:center;gap:7px;padding:8px 12px;border-radius:9px;
+  background:var(--bg3);border:1px solid var(--border2);font-size:13px;font-weight:500}
+.phase-chip-name{flex:1;background:transparent;border:none;color:var(--text);font-size:13px;
+  font-weight:500;min-width:80px;max-width:160px}
+.phase-chip-name:focus{outline:none;border-bottom:1px solid var(--accent)}
+.phase-chip-weeks{width:54px;padding:3px 6px;background:var(--bg4);border:1px solid var(--border);
+  border-radius:6px;color:var(--text2);font-size:12px;text-align:center}
+.phase-chip-weeks:focus{outline:none;border-color:var(--accent);color:var(--text)}
+.phase-chip-del{background:none;border:none;color:var(--text3);cursor:pointer;padding:0 2px;font-size:16px;line-height:1}
+.phase-chip-del:hover{color:var(--danger)}
+.phase-weeks-label{font-size:11px;color:var(--text3);margin-right:2px}
+
+/* Step 2 — day/exercise builder */
+.phase-block{background:var(--bg2);border:1px solid var(--border);border-radius:var(--rl);
+  margin-bottom:16px;overflow:hidden}
+.phase-block-head{padding:14px 18px;border-bottom:1px solid var(--border);display:flex;align-items:center;gap:10px}
+.phase-block-name{font-size:15px;font-weight:700}
+.phase-block-meta{font-size:12px;color:var(--text3)}
+.phase-days{padding:14px 18px;display:flex;flex-direction:column;gap:10px}
+.day-row{background:var(--bg3);border:1px solid var(--border);border-radius:var(--r);overflow:hidden}
+.day-row-head{padding:10px 14px;display:flex;align-items:center;gap:10px;cursor:pointer}
+.day-row-num{width:26px;height:26px;border-radius:7px;background:var(--bg4);border:1px solid var(--border);
+  display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:700;color:var(--text3);flex-shrink:0}
+.day-row-label{flex:1;font-size:14px;font-weight:600}
+.day-row-toggle{font-size:14px;color:var(--text3);transition:transform .2s}
+.day-row.open .day-row-toggle{transform:rotate(180deg)}
+.day-row-body{padding:12px 14px;border-top:1px solid var(--border);display:none}
+.day-row.open .day-row-body{display:block}
+
+.ex-row{display:grid;grid-template-columns:1fr 56px 80px 72px 76px 28px;gap:7px;
+  align-items:end;padding:9px 10px;background:var(--bg4);border:1px solid var(--border);
+  border-radius:8px;margin-bottom:7px}
+.ex-row-input{background:var(--bg5);border:1px solid var(--border);border-radius:6px;
+  padding:5px 8px;color:var(--text);font-size:13px;width:100%}
+.ex-row-input:focus{outline:none;border-color:var(--accent)}
+.ex-row-label{font-size:10px;color:var(--text3);margin-bottom:3px;font-weight:600;text-transform:uppercase;letter-spacing:.04em}
+.ex-del{background:none;border:none;color:var(--text3);cursor:pointer;font-size:16px;padding:0;
+  display:flex;align-items:center;justify-content:center;height:30px}
+.ex-del:hover{color:var(--danger)}
+
+.add-row-btn{display:inline-flex;align-items:center;gap:5px;padding:6px 11px;border-radius:7px;
+  border:1px dashed var(--border2);background:none;color:var(--text3);font-size:12px;cursor:pointer;transition:all .15s}
+.add-row-btn:hover{border-color:var(--accent);color:var(--accent)}
+.add-days-btn{display:flex;align-items:center;justify-content:center;gap:6px;padding:10px;
+  border-radius:8px;border:1px dashed var(--border2);background:none;color:var(--text3);
+  font-size:13px;cursor:pointer;transition:all .15s;width:100%}
+.add-days-btn:hover{border-color:var(--accent);color:var(--accent)}
+
+/* Builder nav */
+.builder-nav{display:flex;justify-content:space-between;align-items:center;margin-top:32px;padding-top:22px;border-top:1px solid var(--border)}
+
+/* ─── GENERAL CONTROLS ─── */
+.btn-primary{padding:10px 24px;background:var(--accent);color:#111;border:none;border-radius:8px;
+  font-size:14px;font-weight:700;cursor:pointer;transition:opacity .15s;display:inline-flex;align-items:center;gap:7px}
+.btn-primary:hover{opacity:.85}
+.btn-primary:disabled{opacity:.4;cursor:not-allowed}
+.btn-secondary{padding:10px 20px;background:var(--bg3);color:var(--text2);border:1px solid var(--border2);
+  border-radius:8px;font-size:14px;cursor:pointer;transition:all .15s;display:inline-flex;align-items:center;gap:6px}
+.btn-secondary:hover{border-color:var(--border3);color:var(--text)}
+.btn-ghost{padding:8px 14px;background:none;border:1px solid var(--border2);border-radius:8px;
+  font-size:13px;color:var(--text2);cursor:pointer;transition:all .15s;display:inline-flex;align-items:center;gap:5px}
+.btn-ghost:hover{border-color:var(--border3);color:var(--text)}
+.btn-danger{padding:7px 12px;background:rgba(255,107,107,.08);border:1px solid rgba(255,107,107,.25);
+  border-radius:8px;font-size:13px;color:var(--danger);cursor:pointer;transition:all .15s}
+.btn-danger:hover{background:rgba(255,107,107,.15)}
+
+/* ─── EXCEL UPLOAD PANEL ─── */
+.upload-panel{background:var(--bg2);border:1px solid var(--border2);border-radius:var(--rl);overflow:hidden;max-width:680px}
+.upload-panel-tabs{display:flex;border-bottom:1px solid var(--border)}
+.upload-tab{flex:1;padding:12px;text-align:center;font-size:13px;font-weight:500;color:var(--text2);
+  cursor:pointer;border:none;background:none;transition:all .15s;border-bottom:2px solid transparent;margin-bottom:-1px}
+.upload-tab:hover{color:var(--text)}
+.upload-tab.active{color:var(--accent);border-bottom-color:var(--accent)}
+.upload-tab-pane{padding:28px;display:none}
+.upload-tab-pane.active{display:block}
+.drop-zone{border:2px dashed var(--border2);border-radius:var(--r);padding:36px 24px;text-align:center;
+  cursor:pointer;transition:all .2s}
+.drop-zone:hover,.drop-zone.dragging{border-color:var(--accent);background:rgba(200,240,122,.04)}
+.drop-zone-icon{font-size:36px;margin-bottom:12px}
+.drop-zone-title{font-size:15px;font-weight:600;margin-bottom:5px}
+.drop-zone-sub{font-size:13px;color:var(--text2)}
+.drop-zone-btn{margin-top:16px;background:var(--accent);color:#111;border:none;border-radius:8px;
+  padding:9px 22px;font-size:13px;font-weight:700;cursor:pointer}
+
+.template-section{margin-top:6px}
+.template-card{background:var(--bg3);border:1px solid var(--border);border-radius:var(--r);padding:16px 18px;
+  display:flex;align-items:center;gap:14px;margin-bottom:10px}
+.template-card-icon{font-size:28px;flex-shrink:0}
+.template-card-info{flex:1}
+.template-card-title{font-size:14px;font-weight:600;margin-bottom:3px}
+.template-card-desc{font-size:12px;color:var(--text2);line-height:1.5}
+.template-format-list{margin-top:16px}
+.format-row{display:flex;gap:8px;align-items:flex-start;padding:8px 0;border-bottom:1px solid var(--border);font-size:13px}
+.format-row:last-child{border-bottom:none}
+.format-col{font-weight:600;color:var(--accent);min-width:100px;flex-shrink:0}
+.format-type{font-size:11px;color:var(--text3);margin-top:2px}
+
+/* ─── SESSION VIEW ─── */
+.session-header{margin-bottom:22px}
+.session-title{font-size:26px;font-weight:800;letter-spacing:-.5px}
+.session-meta{display:flex;gap:8px;flex-wrap:wrap;margin-top:8px}
+.chip{font-size:12px;padding:3px 10px;border-radius:100px;background:var(--bg3);border:1px solid var(--border);color:var(--text2)}
+.chip.accent{background:rgba(200,240,122,.12);color:var(--accent);border-color:rgba(200,240,122,.25)}
+.progress-wrap{margin-bottom:20px}
+.progress-header{display:flex;justify-content:space-between;align-items:center;margin-bottom:7px}
+.progress-label{font-size:13px;color:var(--text2)}
+.progress-count{font-size:13px;font-weight:600;color:var(--accent)}
+.progress-track{height:4px;background:var(--bg3);border-radius:2px;overflow:hidden}
+.progress-fill{height:100%;background:var(--accent);border-radius:2px;transition:width .4s}
+.stats-row{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-bottom:20px}
+.stat-card{background:var(--bg2);border:1px solid var(--border);border-radius:var(--r);padding:13px 15px}
+.stat-num{font-size:22px;font-weight:800;letter-spacing:-.5px}
+.stat-lbl{font-size:10px;color:var(--text3);margin-top:2px;text-transform:uppercase;letter-spacing:.05em}
+.week-bar{display:flex;gap:6px;margin-bottom:20px;flex-wrap:wrap}
+.week-btn{padding:6px 13px;border-radius:8px;font-size:13px;border:1px solid var(--border);
+  background:var(--bg2);color:var(--text2);cursor:pointer;transition:all .15s}
+.week-btn:hover{border-color:var(--border2);color:var(--text)}
+.week-btn.active{background:var(--accent);color:#111;border-color:var(--accent);font-weight:700}
+.section-lbl{font-size:10px;font-weight:700;color:var(--text3);text-transform:uppercase;letter-spacing:.1em;margin-bottom:8px}
+
+/* Warmup */
+.warmup-list{display:flex;flex-direction:column;gap:4px;margin-bottom:20px}
+.warmup-item{display:flex;align-items:center;gap:12px;padding:9px 13px;border-radius:8px;
+  background:var(--bg2);border:1px solid var(--border);font-size:13px}
+.warmup-name{flex:1}
+.warmup-meta{font-size:12px;color:var(--text3)}
+.warmup-link{font-size:12px;color:var(--info)}
+
+/* Exercise cards */
+.exercise-list{display:flex;flex-direction:column;gap:7px;margin-bottom:22px}
+.ex-card{border:1px solid var(--border);border-radius:var(--rl);background:var(--bg2);overflow:hidden;transition:border-color .15s}
+.ex-card.is-done{border-color:rgba(107,255,168,.22)}
+.ex-card.is-open{border-color:var(--border2)}
+.ex-head{display:flex;align-items:flex-start;gap:12px;padding:13px 16px;cursor:pointer;user-select:none;transition:background .1s}
+.ex-head:hover{background:var(--bg3)}
+.ex-num{width:27px;height:27px;border-radius:7px;background:var(--bg3);border:1px solid var(--border);
+  display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:700;color:var(--text3);flex-shrink:0;margin-top:2px}
+.ex-card.is-done .ex-num{background:rgba(107,255,168,.08);color:var(--success);border-color:rgba(107,255,168,.18)}
+.ex-info{flex:1;min-width:0}
+.ex-name{font-size:15px;font-weight:600;line-height:1.3}
+.ex-pills{display:flex;flex-wrap:wrap;gap:5px;margin-top:5px}
+.pill{font-size:11px;padding:2px 7px;border-radius:100px;background:var(--bg3);border:1px solid var(--border);color:var(--text2)}
+.pill.rpe{background:rgba(255,201,107,.08);color:var(--warn);border-color:rgba(255,201,107,.18)}
+.pill.done{background:rgba(107,255,168,.08);color:var(--success);border-color:rgba(107,255,168,.18)}
+.ex-chevron{font-size:16px;color:var(--text3);margin-top:6px;transition:transform .18s;flex-shrink:0}
+.ex-card.is-open .ex-chevron{transform:rotate(180deg)}
+.ex-body{border-top:1px solid var(--border);padding:14px 16px;display:none}
+.ex-card.is-open .ex-body{display:block}
+.coach-note{display:flex;gap:8px;align-items:flex-start;background:rgba(107,184,255,.06);
+  border:1px solid rgba(107,184,255,.13);border-radius:7px;padding:9px 11px;margin-bottom:13px;font-size:13px;color:var(--info)}
+.sets-wrap{overflow-x:auto;margin-bottom:10px}
+table.sets{width:100%;border-collapse:collapse;font-size:13px;min-width:520px}
+table.sets th{text-align:left;padding:5px 9px 7px;color:var(--text3);font-size:10px;font-weight:700;
+  text-transform:uppercase;letter-spacing:.06em;border-bottom:1px solid var(--border)}
+table.sets td{padding:7px 9px;border-bottom:1px solid var(--border);vertical-align:middle}
+table.sets tr:last-child td{border-bottom:none}
+.planned-val{color:var(--text3);font-size:12px}
+.set-num-cell{color:var(--text3);font-weight:700;font-size:12px;width:32px}
+.set-input{background:var(--bg3);border:1px solid var(--border);border-radius:6px;padding:5px 7px;
+  color:var(--text);font-size:13px;width:68px;transition:border-color .15s}
+.set-input:focus{outline:none;border-color:var(--accent)}
+.set-input::placeholder{color:var(--text3)}
+.note-td-input{background:var(--bg3);border:1px solid var(--border);border-radius:6px;padding:5px 8px;
+  color:var(--text);font-size:12px;width:100%;min-width:110px;transition:border-color .15s}
+.note-td-input:focus{outline:none;border-color:rgba(200,240,122,.35)}
+.note-td-input::placeholder{color:var(--text3)}
+.ex-actions{display:flex;gap:8px;flex-wrap:wrap;margin-top:4px}
+.act-btn{display:inline-flex;align-items:center;gap:5px;padding:6px 12px;border-radius:7px;font-size:13px;
+  border:1px solid var(--border);background:var(--bg3);color:var(--text2);cursor:pointer;transition:all .15s}
+.act-btn:hover{border-color:var(--border2);color:var(--text)}
+.act-btn.done{border-color:rgba(107,255,168,.28);background:rgba(107,255,168,.06);color:var(--success)}
+.finish-session{width:100%;padding:13px;background:var(--accent);color:#111;border:none;
+  border-radius:var(--r);font-size:15px;font-weight:800;cursor:pointer;transition:opacity .15s}
+.finish-session:hover{opacity:.85}
+
+/* ─── DASHBOARD ─── */
+.dash-grid{display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-bottom:20px}
+.dash-card{background:var(--bg2);border:1px solid var(--border);border-radius:var(--rl);padding:16px}
+.dash-card.full{grid-column:1/-1}
+.dash-title{font-size:12px;font-weight:700;color:var(--text2);margin-bottom:13px;text-transform:uppercase;letter-spacing:.05em}
+.dash-empty{font-size:13px;color:var(--text3);text-align:center;padding:22px 0}
+.chart-wrap{position:relative;height:190px}
+.chart-wrap.tall{height:250px}
+.ex-select{background:var(--bg3);border:1px solid var(--border);border-radius:7px;
+  padding:6px 10px;color:var(--text);font-size:13px;cursor:pointer}
+.ex-select:focus{outline:none;border-color:var(--accent)}
+
+/* ─── TOAST ─── */
+.toast{position:fixed;bottom:24px;right:24px;background:var(--bg2);border:1px solid var(--border2);
+  border-radius:10px;padding:11px 16px;font-size:13px;box-shadow:0 8px 32px rgba(0,0,0,.6);
+  transform:translateY(70px);opacity:0;transition:all .28s;z-index:9999;max-width:300px}
+.toast.show{transform:translateY(0);opacity:1}
+
+/* ─── MODAL ─── */
+.modal-backdrop{position:fixed;inset:0;background:rgba(0,0,0,.75);z-index:900;display:flex;align-items:center;justify-content:center;padding:20px}
+.modal{background:var(--bg2);border:1px solid var(--border2);border-radius:var(--rl);padding:28px;width:460px;max-width:100%}
+.modal-title{font-size:17px;font-weight:700;margin-bottom:18px}
+.modal-label{font-size:12px;color:var(--text2);margin-bottom:6px;display:block;font-weight:500}
+.modal-input{width:100%;background:var(--bg3);border:1px solid var(--border);border-radius:8px;
+  padding:9px 12px;color:var(--text);font-size:14px;margin-bottom:14px}
+.modal-input:focus{outline:none;border-color:var(--accent)}
+.modal-footer{display:flex;gap:8px;justify-content:flex-end;margin-top:8px}
+
+@media(max-width:700px){
+  .shell{flex-direction:column}
+  .sidebar{width:100%;height:auto;position:static;overflow:visible}
+  .sb-nav{display:flex;overflow-x:auto;padding:8px 10px;gap:4px}
+  .sb-label{display:none}
+  .sb-divider{display:none}
+  .main{padding:18px 14px}
+  .home-cards{grid-template-columns:1fr}
+  .dash-grid{grid-template-columns:1fr}
+  .ex-row{grid-template-columns:1fr 1fr}
+  .stats-row{grid-template-columns:repeat(3,1fr)}
+}
+::-webkit-scrollbar{width:4px;height:4px}
+::-webkit-scrollbar-track{background:transparent}
+::-webkit-scrollbar-thumb{background:var(--bg5);border-radius:2px}
+/* ─── AUTH ─── */
+.sb-user{padding:12px 14px;border-top:1px solid var(--border);margin-top:auto}
+.sb-user-row{display:flex;align-items:center;gap:9px}
+.sb-avatar{width:30px;height:30px;border-radius:50%;background:var(--accent2);border:1px solid rgba(200,240,122,.3);
+  display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:700;color:var(--accent);flex-shrink:0}
+.sb-user-email{font-size:12px;color:var(--text2);flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.sb-signout{background:none;border:none;color:var(--text3);font-size:12px;cursor:pointer;padding:2px 4px;border-radius:4px}
+.sb-signout:hover{color:var(--danger)}
+.auth-screen{display:flex;flex-direction:column;align-items:center;justify-content:center;min-height:100vh;padding:20px}
+.auth-box{background:var(--bg2);border:1px solid var(--border2);border-radius:var(--rl);padding:36px;width:100%;max-width:400px}
+.auth-logo{font-size:22px;font-weight:800;color:var(--accent);letter-spacing:-1px;margin-bottom:6px}
+.auth-title{font-size:20px;font-weight:700;margin-bottom:4px}
+.auth-sub{font-size:13px;color:var(--text2);margin-bottom:28px;line-height:1.5}
+.auth-tabs{display:flex;gap:0;margin-bottom:24px;border-bottom:1px solid var(--border)}
+.auth-tab{flex:1;padding:8px;text-align:center;font-size:13px;font-weight:500;color:var(--text2);
+  cursor:pointer;border:none;background:none;border-bottom:2px solid transparent;margin-bottom:-1px;transition:all .15s}
+.auth-tab:hover{color:var(--text)}
+.auth-tab.active{color:var(--accent);border-bottom-color:var(--accent)}
+.auth-field{margin-bottom:16px}
+.auth-label{font-size:12px;font-weight:600;color:var(--text2);margin-bottom:6px;display:block}
+.auth-input{width:100%;background:var(--bg3);border:1px solid var(--border2);border-radius:8px;
+  padding:10px 13px;color:var(--text);font-size:14px;transition:border-color .15s}
+.auth-input:focus{outline:none;border-color:var(--accent)}
+.auth-input::placeholder{color:var(--text3)}
+.auth-btn{width:100%;padding:11px;background:var(--accent);color:#111;border:none;border-radius:8px;
+  font-size:14px;font-weight:700;cursor:pointer;transition:opacity .15s;margin-top:6px}
+.auth-btn:hover{opacity:.85}
+.auth-btn:disabled{opacity:.45;cursor:not-allowed}
+.auth-error{font-size:13px;color:var(--danger);background:rgba(255,107,107,.08);border:1px solid rgba(255,107,107,.2);
+  border-radius:7px;padding:9px 12px;margin-top:12px}
+.auth-note{font-size:12px;color:var(--text3);text-align:center;margin-top:14px}
+.sync-badge{display:inline-flex;align-items:center;gap:5px;font-size:11px;color:var(--success);
+  background:rgba(107,255,168,.08);border:1px solid rgba(107,255,168,.18);border-radius:100px;padding:2px 8px}
+.sync-badge.saving{color:var(--warn);background:rgba(255,201,107,.08);border-color:rgba(255,201,107,.18)}
+.sync-badge.offline{color:var(--text3);background:transparent;border-color:var(--border)}
+</style>
+</head>
+<body>
+<div class="shell">
+
+<!-- ── SIDEBAR ── -->
+<aside class="sidebar" id="sidebar">
+  <div class="sb-logo">
+    <div class="sb-logo-mark">⬡ LIFT</div>
+    <div class="sb-logo-sub">Training Tracker</div>
+  </div>
+  <div class="sb-nav" id="sbNav">
+    <div class="sb-label">Menu</div>
+    <button class="sb-item active" onclick="goHome()"><span class="sb-dot"></span>Home</button>
+  </div>
+  <div class="sb-user" id="sbUser" style="display:none"></div>
+</aside>
+
+<!-- ── MAIN ── -->
+<main class="main" id="main">
+  <div id="viewHome"></div>
+  <div id="viewBuilder" style="display:none"></div>
+  <div id="viewUpload" style="display:none"></div>
+  <div id="viewApp" style="display:none"></div>
+  <div id="viewAuth" style="display:none"></div>
+</main>
+</div>
+
+<input type="file" id="fileInput" accept=".xlsx" style="display:none">
+<div class="toast" id="toast"></div>
+<div id="modalRoot"></div>
+
+<script>
+// ══════════════════════════════════════════════════
+//  GLOBAL STATE
+// ══════════════════════════════════════════════════
+let data = [];   // phases[]
+let appState = {
+  view: 'home',   // home | builder | upload | app
+  tab: 'session', // session | dashboard | program
+  phase: 0, day: 0, week: 1,
+  open: {}, done: {}, sets: {}, dashEx: '',
+  builder: { step: 1, programName: '', phases: [] }
+};
+
+// ══════════════════════════════════════════════════
+//  ROUTING
+// ══════════════════════════════════════════════════
+function goHome()    { showView('home');    renderHome(); }
+function goBuilder() { showView('builder'); renderBuilder(); }
+function goUpload()  { showView('upload');  renderUpload(); }
+function goApp()     { showView('app');     render(); }
+
+// ══════════════════════════════════════════════════
+//  HOME
+// ══════════════════════════════════════════════════
+function renderHome() {
+  document.getElementById('viewHome').innerHTML = `
+  <div class="home">
+    <div class="home-inner">
+      <div class="home-eyebrow">Lift · Training Tracker</div>
+      <div class="home-title">Build your program.<br>Track every set.</div>
+      <div class="home-sub">Create a structured training plan from scratch, or upload your coach's Excel template. Log loads, reps and notes per set — all stored in your browser.</div>
+      <div class="home-cards">
+        <div class="home-card featured" onclick="startBuilder()">
+          <div class="home-card-icon">🏗️</div>
+          <div class="home-card-title">Build new program</div>
+          <div class="home-card-desc">Create phases, set up training days, and add exercises directly in the app.</div>
+          <div class="home-card-arrow">→</div>
+        </div>
+        <div class="home-card" onclick="goUpload()">
+          <div class="home-card-icon">📥</div>
+          <div class="home-card-title">Upload Excel plan</div>
+          <div class="home-card-desc">Import your coach's .xlsx spreadsheet or use our downloadable template.</div>
+          <div class="home-card-arrow">→</div>
+        </div>
+      </div>
+      ${data.length ? `<div style="margin-top:14px"><button class="btn-secondary" onclick="appState.tab='session';goApp()" style="width:100%;justify-content:center">Continue current program →</button></div>` : ''}
+    </div>
+  </div>`;
+}
+
+// ══════════════════════════════════════════════════
+//  BUILDER — Step 1: program name + phases
+//  BUILDER — Step 2: days + exercises per phase
+// ══════════════════════════════════════════════════
+function startBuilder() {
+  appState.builder = {
+    step: 1,
+    programName: '',
+    phases: [
+      {name:'Phase 1', weeks:4},
+      {name:'Phase 2', weeks:4}
+    ]
+  };
+  goBuilder();
+}
+
+function renderBuilder() {
+  const b = appState.builder;
+  if (b.step === 1) renderBuilderStep1();
+  else renderBuilderStep2();
+}
+
+function renderBuilderStep1() {
+  const b = appState.builder;
+  const el = document.getElementById('viewBuilder');
+  el.innerHTML = `
+  <div class="builder">
+    <div class="builder-header">
+      <div class="builder-title">New program</div>
+      <div class="builder-sub">Name your program and define training phases.</div>
+    </div>
+    <div class="step-indicator">
+      <div class="step active"><div class="step-num">1</div><span>Structure</span></div>
+      <div class="step-line"></div>
+      <div class="step"><div class="step-num">2</div><span>Exercises</span></div>
+    </div>
+
+    <div class="field-group">
+      <label class="field-label">Program name</label>
+      <input class="field-input" id="b-pname" placeholder="e.g. Strength Block 2025" value="${esc(b.programName)}" oninput="appState.builder.programName=this.value">
+    </div>
+
+    <div class="field-group">
+      <label class="field-label">Phases <span style="color:var(--text3);font-weight:400">(each phase = 4 weeks by default)</span></label>
+      <div class="field-hint" style="margin-bottom:10px">Define how many phases your program has. You can rename them and adjust week count.</div>
+      <div class="phase-chips" id="phaseChips"></div>
+      <button class="add-row-btn" style="margin-top:10px" onclick="addBuilderPhase()">+ Add phase</button>
+    </div>
+
+    <div class="builder-nav">
+      <button class="btn-secondary" onclick="goHome()">← Back</button>
+      <button class="btn-primary" onclick="builderNext()">Next: Add exercises →</button>
+    </div>
+  </div>`;
+  renderPhaseChips();
+}
+
+function renderPhaseChips() {
+  const chips = document.getElementById('phaseChips');
+  if (!chips) return;
+  chips.innerHTML = appState.builder.phases.map((ph,i) => `
+    <div class="phase-chip">
+      <input class="phase-chip-name" value="${esc(ph.name)}" placeholder="Phase ${i+1}" oninput="appState.builder.phases[${i}].name=this.value">
+      <span class="phase-weeks-label">×</span>
+      <input class="phase-chip-weeks" type="number" value="${ph.weeks}" min="1" max="16" oninput="appState.builder.phases[${i}].weeks=parseInt(this.value)||4">
+      <span class="phase-weeks-label" style="font-size:10px">wks</span>
+      <button class="phase-chip-del" onclick="removeBuilderPhase(${i})">×</button>
+    </div>`).join('');
+}
+
+function addBuilderPhase() {
+  const n = appState.builder.phases.length + 1;
+  appState.builder.phases.push({name:`Phase ${n}`, weeks:4});
+  renderPhaseChips();
+}
+function removeBuilderPhase(i) {
+  appState.builder.phases.splice(i,1);
+  renderPhaseChips();
+}
+
+function builderNext() {
+  const b = appState.builder;
+  if (!b.phases.length) { toast('Add at least one phase.','warn'); return; }
+  // initialise days structure if not present
+  b.phases.forEach((ph,i) => {
+    if (!ph.days) ph.days = [{exercises:[]},{exercises:[]},{exercises:[]},{exercises:[]}];
+  });
+  b.step = 2;
+  renderBuilderStep2();
+}
+
+function renderBuilderStep2() {
+  const b = appState.builder;
+  let html = `
+  <div class="builder">
+    <div class="builder-header">
+      <div class="builder-title">${esc(b.programName)||'New program'}</div>
+      <div class="builder-sub">Set up training days and exercises for each phase.</div>
+    </div>
+    <div class="step-indicator">
+      <div class="step done"><div class="step-num">✓</div><span>Structure</span></div>
+      <div class="step-line done"></div>
+      <div class="step active"><div class="step-num">2</div><span>Exercises</span></div>
+    </div>`;
+
+  b.phases.forEach((ph,pi) => {
+    html += `
+    <div class="phase-block">
+      <div class="phase-block-head">
+        <div class="phase-block-name">${esc(ph.name)}</div>
+        <div class="phase-block-meta">${ph.weeks} weeks</div>
+      </div>
+      <div class="phase-days" id="phaseDays-${pi}">`;
+
+    (ph.days||[]).forEach((day,di) => {
+      html += renderDayRowBuilder(pi,di,day);
+    });
+
+    html += `
+        <button class="add-days-btn" onclick="addBuilderDay(${pi})">+ Add day</button>
+      </div>
+    </div>`;
+  });
+
+  html += `
+    <div class="builder-nav">
+      <button class="btn-secondary" onclick="appState.builder.step=1;renderBuilderStep1()">← Back</button>
+      <button class="btn-primary" onclick="finishBuilder()">✓ Create program</button>
+    </div>
+  </div>`;
+  document.getElementById('viewBuilder').innerHTML = html;
+}
+
+function renderDayRowBuilder(pi, di, day) {
+  const isOpen = day._open;
+  let exRows = (day.exercises||[]).map((ex,ei) => `
+    <div class="ex-row" id="ber-${pi}-${di}-${ei}">
+      <div><div class="ex-row-label">Exercise</div>
+        <input class="ex-row-input" placeholder="e.g. Romanian Deadlift" value="${esc(ex.name||'')}"
+          oninput="appState.builder.phases[${pi}].days[${di}].exercises[${ei}].name=this.value"></div>
+      <div><div class="ex-row-label">Sets</div>
+        <input class="ex-row-input" type="number" min="1" max="10" value="${ex.numSets||3}"
+          oninput="appState.builder.phases[${pi}].days[${di}].exercises[${ei}].numSets=parseInt(this.value)||3"></div>
+      <div><div class="ex-row-label">Reps</div>
+        <input class="ex-row-input" placeholder="10/10/12" value="${esc(ex.reps||'')}"
+          oninput="appState.builder.phases[${pi}].days[${di}].exercises[${ei}].reps=this.value"></div>
+      <div><div class="ex-row-label">RPE</div>
+        <input class="ex-row-input" placeholder="8" value="${esc(ex.rpe||'')}"
+          oninput="appState.builder.phases[${pi}].days[${di}].exercises[${ei}].rpe=this.value"></div>
+      <div><div class="ex-row-label">Rest</div>
+        <input class="ex-row-input" placeholder="2 min" value="${esc(ex.rest||'')}"
+          oninput="appState.builder.phases[${pi}].days[${di}].exercises[${ei}].rest=this.value"></div>
+      <button class="ex-del" onclick="removeBuilderEx(${pi},${di},${ei})">×</button>
+    </div>`).join('');
+
+  return `
+  <div class="day-row${isOpen?' open':''}" id="bdr-${pi}-${di}">
+    <div class="day-row-head" onclick="toggleBuilderDay(${pi},${di})">
+      <div class="day-row-num">${di+1}</div>
+      <div class="day-row-label">Day ${di+1}</div>
+      <button class="ex-del" onclick="event.stopPropagation();removeBuilderDay(${pi},${di})">×</button>
+      <div class="day-row-toggle">▾</div>
+    </div>
+    <div class="day-row-body">
+      <div id="bex-${pi}-${di}">${exRows}</div>
+      <button class="add-row-btn" onclick="addBuilderEx(${pi},${di})">+ Add exercise</button>
+    </div>
+  </div>`;
+}
+
+function toggleBuilderDay(pi,di) {
+  appState.builder.phases[pi].days[di]._open = !appState.builder.phases[pi].days[di]._open;
+  const el = document.getElementById(`bdr-${pi}-${di}`);
+  if (el) el.classList.toggle('open', !!appState.builder.phases[pi].days[di]._open);
+}
+
+function addBuilderDay(pi) {
+  appState.builder.phases[pi].days.push({exercises:[], _open:true});
+  renderBuilderStep2();
+}
+function removeBuilderDay(pi,di) {
+  appState.builder.phases[pi].days.splice(di,1);
+  renderBuilderStep2();
+}
+function addBuilderEx(pi,di) {
+  appState.builder.phases[pi].days[di].exercises.push({name:'',numSets:3,reps:'10',rpe:'8',rest:'2 min'});
+  renderBuilderStep2();
+  // re-open the day
+  const el = document.getElementById(`bdr-${pi}-${di}`);
+  if (el) { el.classList.add('open'); appState.builder.phases[pi].days[di]._open = true; }
+}
+function removeBuilderEx(pi,di,ei) {
+  appState.builder.phases[pi].days[di].exercises.splice(ei,1);
+  renderBuilderStep2();
+}
+
+function finishBuilder() {
+  const b = appState.builder;
+  if (!b.phases.length) { toast('Add at least one phase.','warn'); return; }
+  let weekCursor = 1;
+  data = b.phases.map(ph => {
+    const start = weekCursor;
+    const weeks = [];
+    for (let w=0;w<ph.weeks;w++) weeks.push(start+w);
+    weekCursor += ph.weeks;
+    return {
+      name: ph.name,
+      phaseName: ph.name,
+      weeks,
+      warmup: [],
+      days: (ph.days||[]).map((d,di) => ({
+        name: `Day ${di+1}`,
+        exercises: (d.exercises||[]).map(ex => ({
+          name: ex.name || 'Exercise',
+          numSets: ex.numSets||3,
+          perSetReps: parseRepsPerSet(ex.reps||'10', ex.numSets||3),
+          rpe: ex.rpe||'', rest: ex.rest||'',
+          tempo:'', coachNote:'',
+          weekData: weeks.map(()=>({load:'',reps:ex.reps||'',rpe:ex.rpe||''}))
+        }))
+      }))
+    };
+  });
+  appState.phase=0; appState.day=0; appState.week=1; appState.tab='session';
+  saveAll();
+  goApp();
+  toast('Program created! 🎉');
+}
+
+// ══════════════════════════════════════════════════
+//  UPLOAD / EXCEL IMPORT
+// ══════════════════════════════════════════════════
+function renderUpload() {
+  document.getElementById('viewUpload').innerHTML = `
+  <div style="max-width:680px">
+    <div style="margin-bottom:28px">
+      <div style="font-size:26px;font-weight:800;letter-spacing:-.5px;margin-bottom:6px">Import from Excel</div>
+      <div style="font-size:14px;color:var(--text2)">Upload your coach's plan or download our template to fill in.</div>
+    </div>
+    <div class="upload-panel">
+      <div class="upload-panel-tabs">
+        <button class="upload-tab active" id="utab-upload" onclick="switchUploadTab('upload')">Upload file</button>
+        <button class="upload-tab" id="utab-template" onclick="switchUploadTab('template')">Download template</button>
+      </div>
+      <div class="upload-tab-pane active" id="upane-upload">
+        <div class="drop-zone" id="dropZone" onclick="document.getElementById('fileInput').click()">
+          <div class="drop-zone-icon">📂</div>
+          <div class="drop-zone-title">Drop your .xlsx file here</div>
+          <div class="drop-zone-sub">or click to browse your files</div>
+          <button class="drop-zone-btn" onclick="event.stopPropagation();document.getElementById('fileInput').click()">Choose file</button>
+        </div>
+        <p style="font-size:11px;color:var(--text3);margin-top:12px;text-align:center">🔒 Processed entirely in your browser — nothing is uploaded to any server.</p>
+      </div>
+      <div class="upload-tab-pane" id="upane-template">
+        <div class="template-card">
+          <div class="template-card-icon">📋</div>
+          <div class="template-card-info">
+            <div class="template-card-title">Lift Training Template.xlsx</div>
+            <div class="template-card-desc">Fill this in with your training data, then upload it above. One sheet per phase, 4 weeks per sheet.</div>
+          </div>
+          <button class="btn-primary" onclick="downloadTemplate()">⬇ Download</button>
+        </div>
+        <div class="template-format-list">
+          <div style="font-size:11px;font-weight:700;color:var(--text3);text-transform:uppercase;letter-spacing:.08em;margin-bottom:10px">Expected column format (row 1 = headers)</div>
+          ${[
+            ['exercise','text','Exercise name'],
+            ['sets','number','Number of sets (e.g. 3)'],
+            ['reps','text','Reps — use slash for per-set (e.g. 10/10/12)'],
+            ['rpe','text','Target RPE (e.g. 8)'],
+            ['rest','text','Rest period (e.g. 2 min)'],
+            ['load_w1','text','Planned load week 1'],
+            ['load_w2','text','Planned load week 2'],
+            ['load_w3','text','Planned load week 3'],
+            ['load_w4','text','Planned load week 4'],
+            ['notes','text','Coach notes'],
+          ].map(([col,type,desc])=>`
+            <div class="format-row">
+              <div><div class="format-col">${col}</div><div class="format-type">${type}</div></div>
+              <div style="font-size:13px;color:var(--text2)">${desc}</div>
+            </div>`).join('')}
+        </div>
+      </div>
+    </div>
+  </div>`;
+  initDropZone();
+}
+
+function switchUploadTab(tab) {
+  ['upload','template'].forEach(t => {
+    document.getElementById(`utab-${t}`).classList.toggle('active', t===tab);
+    document.getElementById(`upane-${t}`).classList.toggle('active', t===tab);
+  });
+}
+
+function initDropZone() {
+  const dz = document.getElementById('dropZone');
+  if (!dz) return;
+  ['dragover','dragenter'].forEach(ev => dz.addEventListener(ev, e=>{e.preventDefault();dz.classList.add('dragging')}));
+  ['dragleave','drop'].forEach(ev => dz.addEventListener(ev, e=>{e.preventDefault();dz.classList.remove('dragging')}));
+  dz.addEventListener('drop', e => {
+    const file = e.dataTransfer.files[0];
+    if (file && file.name.endsWith('.xlsx')) loadFile(file);
+  });
+}
+
+document.getElementById('fileInput').addEventListener('change', e => {
+  if (e.target.files[0]) loadFile(e.target.files[0]);
+  e.target.value = '';
+});
+
+function loadFile(file) {
+  const reader = new FileReader();
+  reader.onload = ev => {
+    try {
+      const wb = XLSX.read(ev.target.result, {type:'binary',cellDates:true});
+      const parsed = parseWorkbook(wb);
+      if (!parsed.length) { toast('No training data found. Check the file format.','warn'); return; }
+      data = parsed;
+      appState.phase=0; appState.day=0; appState.week=1; appState.tab='session';
+      saveAll();
+      goApp();
+      toast(`Plan loaded — ${data.length} phase${data.length>1?'s':''} found! 💪`);
+    } catch(err) { toast('Error reading file: '+err.message,'error'); console.error(err); }
+  };
+  reader.readAsBinaryString(file);
+}
+
+function downloadTemplate() {
+  if (typeof XLSX === 'undefined') { toast('XLSX library not loaded yet.','warn'); return; }
+  const wb = XLSX.utils.book_new();
+  // Build a sample sheet
+  const sampleData = [
+    ['exercise','sets','reps','rpe','rest','load_w1','load_w2','load_w3','load_w4','notes'],
+    ['Romanian Deadlift',3,'10/10/10','8','2 min','30kg','32.5kg','35kg','35kg','Keep neutral spine'],
+    ['Bulgarian Split Squat',3,'12','8','2 min','20kg','22.5kg','22.5kg','25kg',''],
+    ['Incline DB Press',3,'10','8','90s','12kg','12kg','14kg','14kg','Control the eccentric'],
+    ['Lateral Raise',3,'15','8','60s','4kg','4kg','5kg','5kg',''],
+  ];
+  // Day 1 sheet
+  const ws1 = XLSX.utils.aoa_to_sheet(sampleData);
+  ws1['!cols'] = [{wch:28},{wch:6},{wch:12},{wch:6},{wch:8},{wch:10},{wch:10},{wch:10},{wch:10},{wch:28}];
+  XLSX.utils.book_append_sheet(wb, ws1, 'Phase 1 - Day 1');
+  // Day 2 sheet
+  const ws2 = XLSX.utils.aoa_to_sheet([
+    ['exercise','sets','reps','rpe','rest','load_w1','load_w2','load_w3','load_w4','notes'],
+    ['Block Pull',3,'8','7','3 min','40kg','42.5kg','45kg','47.5kg',''],
+    ['Leg Curl',3,'12','8','90s','18kg','18kg','20kg','20kg',''],
+    ['Chest Supported Row',3,'10','8','90s','22kg','22kg','24kg','24kg','Squeeze at top'],
+    ['Rear Delt Fly',3,'15','9','60s','5kg','5kg','5kg','6kg',''],
+  ]);
+  ws2['!cols'] = ws1['!cols'];
+  XLSX.utils.book_append_sheet(wb, ws2, 'Phase 1 - Day 2');
+  XLSX.writeFile(wb, 'Lift_Training_Template.xlsx');
+  toast('Template downloaded!');
+}
+
+// ══════════════════════════════════════════════════
+//  EXCEL PARSING
+// ══════════════════════════════════════════════════
+function parseWorkbook(wb) {
+  // Check if it's our simple template format (has 'exercise' header)
+  const simpleSheets = wb.SheetNames.filter(n => {
+    const ws = wb.Sheets[n];
+    const rows = XLSX.utils.sheet_to_json(ws, {header:1,defval:''});
+    return rows[0] && String(rows[0][0]).toLowerCase().trim() === 'exercise';
+  });
+
+  if (simpleSheets.length > 0) {
+    return parseSimpleFormat(wb, simpleSheets);
+  }
+  return parseCoachFormat(wb);
+}
+
+function parseSimpleFormat(wb, sheetNames) {
+  // Group sheets by phase name (everything before last ' - Day X')
+  const phaseMap = new Map();
+  sheetNames.forEach(name => {
+    const m = name.match(/^(.+?)\s*[-–]\s*Day\s*(\d+)$/i);
+    const phaseName = m ? m[1].trim() : name;
+    const dayNum = m ? parseInt(m[2]) : 1;
+    if (!phaseMap.has(phaseName)) phaseMap.set(phaseName, []);
+    phaseMap.get(phaseName).push({dayNum, name});
+  });
+
+  let weekStart = 1;
+  const phases = [];
+  phaseMap.forEach((daySheets, phaseName) => {
+    daySheets.sort((a,b)=>a.dayNum-b.dayNum);
+    const weeks = [weekStart, weekStart+1, weekStart+2, weekStart+3];
+    weekStart += 4;
+    const days = daySheets.map(({name}) => {
+      const ws = wb.Sheets[name];
+      const rows = XLSX.utils.sheet_to_json(ws, {header:1,defval:''});
+      const headers = rows[0].map(h => String(h).toLowerCase().trim());
+      const exercises = rows.slice(1).filter(r => r[0]).map(row => {
+        const get = (col) => cv(row[headers.indexOf(col)]);
+        const numSets = parseInt(get('sets'))||3;
+        const repsRaw = get('reps');
+        const wkData = weeks.map((_,wi) => {
+          const loadRaw = get(`load_w${wi+1}`);
+          return {load: loadRaw, perSetLoads: parseRepsPerSet(loadRaw, numSets), reps: repsRaw, rpe: get('rpe')};
+        });
+        return {
+          name: cleanExName(get('exercise')||'Exercise'),
+          numSets, perSetReps: parseRepsPerSet(repsRaw, numSets),
+          rpe: get('rpe'), rest: get('rest'), tempo: '',
+          coachNote: get('notes'), weekData: wkData
+        };
+      });
+      return {name: `Day ${daySheets.findIndex(d=>d.name===name)+1}`, exercises};
+    });
+    phases.push({name:phaseName, phaseName, weeks, warmup:[], days});
+  });
+
+  // If only one sheet without Day suffix, treat as one day per phase
+  if (!phases.length) {
+    sheetNames.forEach(name => {
+      const ws = wb.Sheets[name]; const weeks = [weekStart,weekStart+1,weekStart+2,weekStart+3]; weekStart+=4;
+      const rows = XLSX.utils.sheet_to_json(ws,{header:1,defval:''});
+      const headers = rows[0].map(h=>String(h).toLowerCase().trim());
+      const exercises = rows.slice(1).filter(r=>r[0]).map(row=>{
+        const get=(col)=>cv(row[headers.indexOf(col)]);
+        const numSets=parseInt(get('sets'))||3; const repsRaw=get('reps');
+        return {name:cleanExName(get('exercise')||'Exercise'),numSets,perSetReps:parseRepsPerSet(repsRaw,numSets),
+          rpe:get('rpe'),rest:get('rest'),tempo:'',coachNote:get('notes'),
+          weekData:weeks.map((_,wi)=>{const lr=get(`load_w${wi+1}`);return{load:lr,perSetLoads:parseRepsPerSet(lr,numSets),reps:repsRaw,rpe:get('rpe')};})};
+      });
+      phases.push({name,phaseName:name,weeks,warmup:[],days:[{name:'Day 1',exercises}]});
+    });
+  }
+  return phases;
+}
+
+function parseCoachFormat(wb) {
+  const phases = [];
+  wb.SheetNames.forEach(sname => {
+    if (/trang|sheet1/i.test(sname)) return;
+    const ws = wb.Sheets[sname];
+    const rows = XLSX.utils.sheet_to_json(ws,{header:1,defval:''});
+    const warmup = extractWarmup(rows);
+    const days = extractDays(rows);
+    const weeks = extractWeekNums(sname);
+    if (days.length) phases.push({name:sname,phaseName:friendlyPhaseName(sname),weeks,warmup,days});
+  });
+  return phases;
+}
+
+function friendlyPhaseName(n) {
+  const m = n.match(/W(\d+)[-–]W?(\d+)/i);
+  if (m) return `Phase W${m[1]}–W${m[2]}`;
+  return n;
+}
+function extractWeekNums(name) {
+  const m = name.match(/W(\d+)/i); const s=m?parseInt(m[1]):1;
+  return [s,s+1,s+2,s+3];
+}
+function extractWarmup(rows) {
+  const out=[]; let inside=false;
+  for (const row of rows) {
+    const c0=cv(row[0]),c1=cv(row[1]);
+    if (/warm.?up/i.test(c0)){inside=true;continue}
+    if (inside&&(c0.toLowerCase().startsWith('day')||/lưu ý/i.test(c0))) break;
+    if (inside&&(c0==='Exercise'||c1==='Exercise')) continue;
+    if (inside){const nm=cv(c1||c0);if(nm.length>2&&!/lưu ý|compound/i.test(nm)){const lk=cv(row[4]);out.push({name:nm,sets:cv(row[2]),reps:cv(row[3]),link:lk.startsWith('http')?lk:''});}}
+  }
+  return out;
+}
+function extractDays(rows) {
+  const days=[]; let cur=null; let hdr=false;
+  for (const row of rows) {
+    const c0=cv(row[0]);
+    if (c0.toLowerCase().startsWith('day')){if(cur)days.push(cur);cur={name:c0,exercises:[]};hdr=false;continue}
+    if (!cur) continue;
+    if (cv(row[1])==='Exercise'||c0==='Exercise'){hdr=true;continue}
+    if (!hdr) continue;
+    if (!c0||/total set|total/i.test(c0)) continue;
+    const nm=cv(row[1])||c0;
+    if (nm.length<2||nm==='Exercise'||nm==='NaN') continue;
+    const numSets=parseInt(cv(row[2]))||3;
+    const repsRaw=cv(row[3]);
+    const perSetReps=parseRepsPerSet(repsRaw,numSets);
+    const wkData=[];
+    for(let w=0;w<4;w++){const b=7+w*3;const loadRaw=cv(row[b]);wkData.push({load:loadRaw,perSetLoads:parseRepsPerSet(loadRaw,numSets),reps:cv(row[b+1]),rpe:cv(row[b+2])});}
+    cur.exercises.push({name:cleanExName(nm),numSets,perSetReps,rpe:cv(row[4]),tempo:cv(row[5]),rest:cv(row[6]),coachNote:cv(row[19]),weekData:wkData});
+  }
+  if(cur)days.push(cur);
+  return days;
+}
+function parseRepsPerSet(raw,n){
+  if(!raw)return Array(n).fill('');
+  const parts=String(raw).split('/').map(s=>s.trim()).filter(Boolean);
+  while(parts.length<n)parts.push(parts[parts.length-1]||String(raw));
+  return parts.slice(0,n);
+}
+function cleanExName(s){
+  let n=String(s).replace(/\n/g,' ').replace(/\s+/g,' ').trim();
+  n=n.replace(/^[A-Z]\d?\s+/,'');
+  n=n.replace(/\bHard set x\d+\b/gi,'').replace(/\bAmrap \d+[''']?/gi,'');
+  n=n.replace(/\bBack-off \d+%\b/gi,'').replace(/\bBack off \d+%\b/gi,'');
+  n=n.replace(/\bHard set\b/gi,'').replace(/\(\s*Destiny set[^)]*\)/gi,'');
+  n=n.replace(/Destiny set[^,\n]*/gi,'').replace(/\s+/g,' ').trim();
+  return n;
+}
+function cv(v){
+  if(v===null||v===undefined)return'';
+  if(v instanceof Date)return'';
+  const s=String(v).trim();
+  return(s==='NaN'||s==='null'||s==='undefined')?'':s;
+}
+
+// ══════════════════════════════════════════════════
+//  APP — SESSION / DASHBOARD / PROGRAM EDITOR
+// ══════════════════════════════════════════════════
+function render() {
+  if (!data.length) { goHome(); return; }
+  buildSidebar();
+  if (appState.tab==='session') renderSession();
+  else if (appState.tab==='dashboard') renderDashboard();
+  else if (appState.tab==='program') renderProgramEditor();
+}
+
+// ── SESSION ──────────────────────────────────────
+function renderSession() {
+  const ph = data[appState.phase]; if(!ph){return}
+  const day = ph.days[appState.day]||ph.days[0];
+  const wdi = appState.week-1;
+  const totalEx = day.exercises.length;
+  const doneCount = day.exercises.filter((_,i)=>appState.done[exKey(i)]).length;
+  const totalSets = day.exercises.reduce((a,e)=>a+e.numSets,0);
+  const pct = totalEx ? Math.round(doneCount/totalEx*100) : 0;
+
+  let html = `
+  <div class="session-header">
+    <div class="session-title">${esc(day.name)}</div>
+    <div class="session-meta">
+      <span class="chip accent">${esc(ph.phaseName)} · Week ${ph.weeks[wdi]}</span>
+      <span class="chip">${totalEx} exercises</span>
+      <span class="chip">${totalSets} sets</span>
+    </div>
+  </div>
+  <div class="progress-wrap">
+    <div class="progress-header"><span class="progress-label">Progress</span><span class="progress-count">${doneCount}/${totalEx}</span></div>
+    <div class="progress-track"><div class="progress-fill" style="width:${pct}%"></div></div>
+  </div>
+  <div class="stats-row">
+    <div class="stat-card"><div class="stat-num">${totalEx}</div><div class="stat-lbl">Exercises</div></div>
+    <div class="stat-card"><div class="stat-num">${totalSets}</div><div class="stat-lbl">Sets</div></div>
+    <div class="stat-card"><div class="stat-num" style="color:${doneCount===totalEx&&totalEx>0?'var(--success)':'inherit'}">${pct}%</div><div class="stat-lbl">Done</div></div>
+  </div>
+
+  <!-- Day tabs -->
+  <div style="display:flex;gap:6px;margin-bottom:18px;flex-wrap:wrap">
+    ${ph.days.map((d,i)=>`<button class="week-btn${i===appState.day?' active':''}" onclick="appState.day=${i};appState.open={};renderSession()">${esc(d.name)}</button>`).join('')}
+  </div>
+  <!-- Week tabs -->
+  <div class="week-bar">
+    ${ph.weeks.map((w,i)=>`<button class="week-btn${appState.week===i+1?' active':''}" onclick="appState.week=${i+1};renderSession()">Week ${w}</button>`).join('')}
+  </div>`;
+
+  if (ph.warmup && ph.warmup.length) {
+    html += `<div class="section-lbl">🔥 Warm-up</div><div class="warmup-list">`;
+    ph.warmup.forEach(w=>{html+=`<div class="warmup-item"><div class="warmup-name">${esc(w.name)}</div><div class="warmup-meta">${esc(w.sets)}×${esc(w.reps)}</div>${w.link?`<a href="${esc(w.link)}" target="_blank" class="warmup-link">▶ Video</a>`:''}</div>`;});
+    html += `</div>`;
+  }
+
+  html += `<div class="section-lbl">Exercises</div><div class="exercise-list">`;
+  day.exercises.forEach((ex,ei)=>{ html += renderExCard(ex,ei,wdi); });
+  html += `</div><button class="finish-session" onclick="finishSession()">✓ Finish & save session</button>`;
+  document.getElementById('viewApp').innerHTML = html;
+}
+
+function exKey(ei){ return `${appState.phase}-${appState.day}-${appState.week}-${ei}`; }
+function setDK(ei,si){ return `${exKey(ei)}-s${si}`; }
+
+function renderExCard(ex,ei,wdi) {
+  const key=exKey(ei); const isOpen=!!appState.open[key]; const isDone=!!appState.done[key];
+  const wd=ex.weekData[wdi]||{};
+  let pills='';
+  if(ex.numSets) pills+=`<span class="pill">${ex.numSets} sets</span>`;
+  if(ex.rpe&&ex.rpe.length<15&&!/nan/i.test(ex.rpe)) pills+=`<span class="pill rpe">RPE ${esc(ex.rpe)}</span>`;
+  if(ex.rest) pills+=`<span class="pill">⏱ ${esc(ex.rest)}</span>`;
+  if(isDone) pills+=`<span class="pill done">✓ Done</span>`;
+
+  let setRows='';
+  for(let s=0;s<ex.numSets;s++){
+    const dk=setDK(ei,s); const sv=appState.sets[dk]||{};
+    const pLoad=(wd.perSetLoads&&wd.perSetLoads[s])||wd.load||'';
+    const pReps=ex.perSetReps[s]||wd.reps||'';
+    setRows+=`<tr>
+      <td class="set-num-cell">${s+1}</td>
+      <td class="planned-val">${pLoad||'—'}</td>
+      <td class="planned-val">${pReps||'—'}</td>
+      <td><input class="set-input" type="text" placeholder="${esc(pLoad)||'kg'}" value="${esc(sv.load||'')}" data-ei="${ei}" data-si="${s}" data-f="load" oninput="logF(this)"></td>
+      <td><input class="set-input" type="text" placeholder="${esc(pReps)||'reps'}" value="${esc(sv.reps||'')}" data-ei="${ei}" data-si="${s}" data-f="reps" oninput="logF(this)"></td>
+      <td><input class="note-td-input" type="text" placeholder="note…" value="${esc(sv.note||'')}" data-ei="${ei}" data-si="${s}" data-f="note" oninput="logF(this)"></td>
+    </tr>`;
+  }
+
+  return `
+  <div class="ex-card${isDone?' is-done':''}${isOpen?' is-open':''}" id="exc-${key}">
+    <div class="ex-head" onclick="toggleEx('${key}')">
+      <div class="ex-num">${ei+1}</div>
+      <div class="ex-info">
+        <div class="ex-name">${esc(ex.name)}</div>
+        <div class="ex-pills">${pills}</div>
+      </div>
+      <span class="ex-chevron">▾</span>
+    </div>
+    <div class="ex-body">
+      ${ex.coachNote?`<div class="coach-note">💬 ${esc(ex.coachNote)}</div>`:''}
+      <div class="sets-wrap">
+        <table class="sets">
+          <thead><tr><th>Set</th><th>Planned load</th><th>Planned reps</th><th>Actual load</th><th>Actual reps</th><th>Note</th></tr></thead>
+          <tbody>${setRows}</tbody>
+        </table>
+      </div>
+      <div class="ex-actions">
+        <button class="act-btn${isDone?' done':''}" onclick="toggleDone('${key}',${ei})">${isDone?'✓ Done!':'○ Mark done'}</button>
+      </div>
+    </div>
+  </div>`;
+}
+
+function toggleEx(key){
+  appState.open[key]=!appState.open[key];
+  const c=document.getElementById('exc-'+key); if(c) c.classList.toggle('is-open',!!appState.open[key]);
+}
+function toggleDone(key,ei){
+  appState.done[key]=!appState.done[key];
+  const ph=data[appState.phase]; const day=ph.days[appState.day];
+  const dc=day.exercises.filter((_,i)=>appState.done[exKey(i)]).length;
+  const te=day.exercises.length; const pct=te?Math.round(dc/te*100):0;
+  const c=document.getElementById('exc-'+key);
+  if(c){
+    const isDone=appState.done[key];
+    c.classList.toggle('is-done',isDone);
+    const b=c.querySelector('.act-btn'); if(b){b.textContent=isDone?'✓ Done!':'○ Mark done';b.classList.toggle('done',isDone);}
+    const p=c.querySelector('.ex-pills'); if(p){let d=p.querySelector('.pill.done');if(isDone&&!d){const x=document.createElement('span');x.className='pill done';x.textContent='✓ Done';p.appendChild(x);}if(!isDone&&d)d.remove();}
+  }
+  const f=document.querySelector('.progress-fill'); if(f)f.style.width=pct+'%';
+  const cnt=document.querySelector('.progress-count'); if(cnt)cnt.textContent=`${dc}/${te}`;
+  const sn=document.querySelectorAll('.stat-num'); if(sn[2]){sn[2].textContent=pct+'%';sn[2].style.color=(dc===te&&te>0)?'var(--success)':'inherit';}
+}
+function logF(input){
+  const ei=parseInt(input.dataset.ei); const si=parseInt(input.dataset.si); const f=input.dataset.f;
+  const dk=setDK(ei,si); if(!appState.sets[dk])appState.sets[dk]={};
+  appState.sets[dk][f]=input.value;
+}
+function finishSession(){
+  saveAll();
+  toast('Session saved! 💾');
+}
+
+// ── DASHBOARD ─────────────────────────────────────
+function renderDashboard() {
+  const allEx=new Set();
+  data.forEach(ph=>ph.days.forEach(d=>d.exercises.forEach(e=>allEx.add(e.name))));
+  const exList=[...allEx].sort();
+  if(!appState.dashEx&&exList.length) appState.dashEx=exList[0];
+
+  const loadPts=[];
+  data.forEach(ph=>{
+    ph.days.forEach(d=>{d.exercises.forEach(ex=>{
+      if(ex.name!==appState.dashEx)return;
+      ex.weekData.forEach((wd,wi)=>{
+        if(!wd.load)return;
+        const n=parseFloat(String(wd.load).replace(/[^0-9.]/g,''));
+        if(!isNaN(n)&&n>0) loadPts.push({label:`W${ph.weeks[wi]}`,load:n});
+      });
+    });});
+  });
+
+  const logPts=[];
+  data.forEach((ph,pi)=>{ph.days.forEach((d,di)=>{d.exercises.forEach((ex,ei)=>{
+    if(ex.name!==appState.dashEx)return;
+    ph.weeks.forEach((_,wi)=>{for(let s=0;s<ex.numSets;s++){
+      const dk=`${pi}-${di}-${wi+1}-${ei}-s${s}`;
+      const sv=appState.sets[dk];
+      if(sv&&sv.load){const n=parseFloat(String(sv.load).replace(/[^0-9.]/g,''));if(!isNaN(n)&&n>0)logPts.push({label:`W${ph.weeks[wi]} S${s+1}`,load:n});}
+    }});
+  });});});
+
+  const volData=data.map(ph=>{
+    let v=0;
+    ph.days.forEach((d,di)=>{d.exercises.forEach((ex,ei)=>{
+      const pi=data.indexOf(ph);
+      ph.weeks.forEach((_,wi)=>{for(let s=0;s<ex.numSets;s++){
+        const dk=`${pi}-${di}-${wi+1}-${ei}-s${s}`;
+        const sv=appState.sets[dk];
+        if(sv&&sv.load&&sv.reps){const l=parseFloat(sv.load)||0;const r=parseFloat(sv.reps)||0;v+=l*r;}
+      }});
+    });});
+    return{name:ph.phaseName,vol:Math.round(v)};
+  });
+
+  let html=`
+  <div style="margin-bottom:22px">
+    <div style="font-size:26px;font-weight:800;letter-spacing:-.5px;margin-bottom:6px">Dashboard</div>
+    <div style="display:flex;align-items:center;gap:10px;margin-top:16px">
+      <span style="font-size:13px;color:var(--text2)">Exercise:</span>
+      <select class="ex-select" onchange="appState.dashEx=this.value;renderDashboard()">
+        ${exList.map(e=>`<option value="${esc(e)}" ${e===appState.dashEx?'selected':''}>${esc(e)}</option>`).join('')}
+      </select>
+    </div>
+  </div>
+  <div class="dash-grid">
+    <div class="dash-card full"><div class="dash-title">📈 Planned load — ${esc(appState.dashEx)}</div>
+      ${loadPts.length?`<div class="chart-wrap tall"><canvas id="chLoad"></canvas></div>`:`<div class="dash-empty">No planned load data for this exercise.</div>`}
+    </div>
+    <div class="dash-card full"><div class="dash-title">🏆 Actual logged loads</div>
+      ${logPts.length?`<div class="chart-wrap"><canvas id="chLogged"></canvas></div>`:`<div class="dash-empty">Start logging sets to see your actual loads here.</div>`}
+    </div>
+    <div class="dash-card full"><div class="dash-title">📦 Volume by phase (load × reps)</div>
+      ${volData.some(d=>d.vol>0)?`<div class="chart-wrap"><canvas id="chVol"></canvas></div>`:`<div class="dash-empty">Log some sessions to see volume data.</div>`}
+    </div>
+  </div>`;
+  document.getElementById('viewApp').innerHTML = html;
+  const co={responsive:true,maintainAspectRatio:false,plugins:{legend:{labels:{color:'#888',font:{size:12}}},tooltip:{backgroundColor:'#1a1a1a',borderColor:'#333',borderWidth:1}},scales:{x:{ticks:{color:'#555',font:{size:11}},grid:{color:'rgba(255,255,255,0.04)'}},y:{ticks:{color:'#555',font:{size:11}},grid:{color:'rgba(255,255,255,0.04)'}}}};
+  if(loadPts.length) new Chart(document.getElementById('chLoad'),{type:'line',data:{labels:loadPts.map(p=>p.label),datasets:[{label:'Planned load',data:loadPts.map(p=>p.load),borderColor:'#c8f07a',backgroundColor:'rgba(200,240,122,0.08)',tension:.3,pointRadius:4,pointBackgroundColor:'#c8f07a',fill:true}]},options:co});
+  if(logPts.length) new Chart(document.getElementById('chLogged'),{type:'bar',data:{labels:logPts.map(p=>p.label),datasets:[{label:'Actual load',data:logPts.map(p=>p.load),backgroundColor:'rgba(107,184,255,.55)',borderColor:'#6bb8ff',borderWidth:1,borderRadius:4}]},options:co});
+  if(volData.some(d=>d.vol>0)) new Chart(document.getElementById('chVol'),{type:'bar',data:{labels:volData.map(p=>p.name),datasets:[{label:'Volume',data:volData.map(p=>p.vol),backgroundColor:'rgba(200,240,122,.45)',borderColor:'#c8f07a',borderWidth:1,borderRadius:5}]},options:co});
+}
+
+// ── PROGRAM EDITOR ────────────────────────────────
+function renderProgramEditor() {
+  let html=`
+  <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:24px">
+    <div style="font-size:26px;font-weight:800;letter-spacing:-.5px">Edit program</div>
+    <button class="btn-primary" onclick="showAddPhaseModal()">+ New phase</button>
+  </div>`;
+  data.forEach((ph,pi)=>{
+    html+=`<div style="background:var(--bg2);border:1px solid var(--border);border-radius:var(--rl);margin-bottom:14px;overflow:hidden">
+      <div style="padding:14px 18px;border-bottom:1px solid var(--border);display:flex;align-items:center;gap:10px;background:var(--bg3)">
+        <input style="flex:1;background:var(--bg4);border:1px solid var(--border2);border-radius:7px;padding:7px 11px;color:var(--text);font-size:14px;font-weight:700" value="${esc(ph.phaseName)}" oninput="data[${pi}].phaseName=this.value;buildSidebar()">
+        <button class="btn-danger" onclick="deletePhase(${pi})">Delete</button>
+      </div>
+      <div style="padding:14px 18px">`;
+    ph.days.forEach((d,di)=>{
+      html+=`<div style="border:1px solid var(--border);border-radius:var(--r);margin-bottom:10px;overflow:hidden">
+        <div style="padding:9px 13px;background:var(--bg3);display:flex;align-items:center;gap:8px;cursor:pointer" onclick="togglePEDay(this)">
+          <div style="flex:1;font-size:13px;font-weight:600">${esc(d.name)}</div>
+          <button style="background:none;border:none;color:var(--text3);cursor:pointer;font-size:16px" onclick="event.stopPropagation();deletePEDay(${pi},${di})">×</button>
+          <span style="color:var(--text3);font-size:13px">▾</span>
+        </div>
+        <div style="padding:12px 13px;display:none">`;
+      d.exercises.forEach((ex,ei)=>{
+        html+=`<div style="display:grid;grid-template-columns:1fr 52px 78px 66px 72px 26px;gap:6px;align-items:end;padding:8px 10px;background:var(--bg4);border:1px solid var(--border);border-radius:7px;margin-bottom:6px">
+          <div><div style="font-size:9px;color:var(--text3);font-weight:700;text-transform:uppercase;letter-spacing:.05em;margin-bottom:3px">Exercise</div>
+            <input style="background:var(--bg5);border:1px solid var(--border);border-radius:5px;padding:5px 7px;color:var(--text);font-size:13px;width:100%" value="${esc(ex.name)}" oninput="data[${pi}].days[${di}].exercises[${ei}].name=this.value"></div>
+          <div><div style="font-size:9px;color:var(--text3);font-weight:700;text-transform:uppercase;letter-spacing:.05em;margin-bottom:3px">Sets</div>
+            <input type="number" style="background:var(--bg5);border:1px solid var(--border);border-radius:5px;padding:5px 7px;color:var(--text);font-size:13px;width:100%" value="${ex.numSets}" oninput="data[${pi}].days[${di}].exercises[${ei}].numSets=parseInt(this.value)||3;data[${pi}].days[${di}].exercises[${ei}].perSetReps=parseRepsPerSet(data[${pi}].days[${di}].exercises[${ei}].perSetReps.join('/'),parseInt(this.value)||3)"></div>
+          <div><div style="font-size:9px;color:var(--text3);font-weight:700;text-transform:uppercase;letter-spacing:.05em;margin-bottom:3px">Reps</div>
+            <input style="background:var(--bg5);border:1px solid var(--border);border-radius:5px;padding:5px 7px;color:var(--text);font-size:13px;width:100%" value="${esc(ex.perSetReps.join('/'))}" oninput="data[${pi}].days[${di}].exercises[${ei}].perSetReps=parseRepsPerSet(this.value,data[${pi}].days[${di}].exercises[${ei}].numSets)"></div>
+          <div><div style="font-size:9px;color:var(--text3);font-weight:700;text-transform:uppercase;letter-spacing:.05em;margin-bottom:3px">RPE</div>
+            <input style="background:var(--bg5);border:1px solid var(--border);border-radius:5px;padding:5px 7px;color:var(--text);font-size:13px;width:100%" value="${esc(ex.rpe)}" oninput="data[${pi}].days[${di}].exercises[${ei}].rpe=this.value"></div>
+          <div><div style="font-size:9px;color:var(--text3);font-weight:700;text-transform:uppercase;letter-spacing:.05em;margin-bottom:3px">Rest</div>
+            <input style="background:var(--bg5);border:1px solid var(--border);border-radius:5px;padding:5px 7px;color:var(--text);font-size:13px;width:100%" value="${esc(ex.rest)}" oninput="data[${pi}].days[${di}].exercises[${ei}].rest=this.value"></div>
+          <button style="background:none;border:none;color:var(--text3);cursor:pointer;font-size:16px;display:flex;align-items:center;justify-content:center;height:28px" onclick="deletePEEx(${pi},${di},${ei})">×</button>
+        </div>`;
+      });
+      html+=`<button class="add-row-btn" onclick="addPEEx(${pi},${di})">+ Add exercise</button>
+        </div>
+      </div>`;
+    });
+    html+=`<button class="add-days-btn" onclick="addPEDay(${pi})">+ Add day</button></div></div>`;
+  });
+  html+=`<div style="display:flex;justify-content:flex-end;gap:10px;margin-top:8px;padding-top:18px;border-top:1px solid var(--border)">
+    <button class="btn-secondary" onclick="appState.tab='session';render()">← Back</button>
+    <button class="btn-primary" onclick="saveAll();toast('Saved! 💾')">Save</button>
+  </div>`;
+  document.getElementById('viewApp').innerHTML = html;
+}
+
+function togglePEDay(head) {
+  const body = head.nextElementSibling;
+  const chevron = head.querySelector('span:last-child');
+  const open = body.style.display==='none'||body.style.display==='';
+  body.style.display = open?'block':'none';
+  if(chevron) chevron.style.transform = open?'rotate(180deg)':'';
+}
+function addPEEx(pi,di){ data[pi].days[di].exercises.push({name:'',numSets:3,perSetReps:['10','10','10'],rpe:'8',rest:'2 min',tempo:'',coachNote:'',weekData:[{},{},{},{}]}); renderProgramEditor(); }
+function deletePEEx(pi,di,ei){ data[pi].days[di].exercises.splice(ei,1); renderProgramEditor(); }
+function addPEDay(pi){ data[pi].days.push({name:`Day ${data[pi].days.length+1}`,exercises:[]}); renderProgramEditor(); }
+function deletePEDay(pi,di){ if(!confirm('Delete this day?'))return; data[pi].days.splice(di,1); if(appState.day>=data[pi].days.length)appState.day=Math.max(0,data[pi].days.length-1); renderProgramEditor(); }
+function deletePhase(pi){ if(!confirm('Delete this entire phase?'))return; data.splice(pi,1); if(appState.phase>=data.length)appState.phase=Math.max(0,data.length-1); renderProgramEditor(); }
+
+// ── ADD PHASE MODAL ───────────────────────────────
+function showAddPhaseModal() {
+  const nw = data.length ? data[data.length-1].weeks.slice(-1)[0]+1 : 1;
+  document.getElementById('modalRoot').innerHTML=`
+  <div class="modal-backdrop" onclick="if(event.target===this)closeModal()">
+    <div class="modal">
+      <div class="modal-title">Add new phase</div>
+      <label class="modal-label">Phase name</label>
+      <input class="modal-input" id="mp-name" placeholder="Phase 3" value="Phase ${data.length+1}">
+      <label class="modal-label">Start week</label>
+      <input class="modal-input" id="mp-week" type="number" value="${nw}" min="1">
+      <label class="modal-label">Number of weeks</label>
+      <input class="modal-input" id="mp-nw" type="number" value="4" min="1" max="16">
+      <label class="modal-label">Training days per week</label>
+      <input class="modal-input" id="mp-days" type="number" value="4" min="1" max="7">
+      <div class="modal-footer">
+        <button class="btn-secondary" onclick="closeModal()">Cancel</button>
+        <button class="btn-primary" onclick="createPhase()">Create</button>
+      </div>
+    </div>
+  </div>`;
+}
+function createPhase(){
+  const name=document.getElementById('mp-name').value.trim()||'New Phase';
+  const ws=parseInt(document.getElementById('mp-week').value)||1;
+  const nw=parseInt(document.getElementById('mp-nw').value)||4;
+  const nd=parseInt(document.getElementById('mp-days').value)||4;
+  const weeks=[]; for(let w=0;w<nw;w++) weeks.push(ws+w);
+  const days=[]; for(let d=0;d<nd;d++) days.push({name:`Day ${d+1}`,exercises:[]});
+  data.push({name,phaseName:name,weeks,warmup:[],days});
+  appState.phase=data.length-1; appState.day=0; appState.week=1;
+  closeModal(); saveAll(); renderProgramEditor();
+  toast('Phase added!');
+}
+function closeModal(){ document.getElementById('modalRoot').innerHTML=''; }
+
+// ══════════════════════════════════════════════════
+//  SUPABASE
+// ══════════════════════════════════════════════════
+const SUPA_URL = 'https://uywdkdvitcpejvtfiyyq.supabase.co';
+const SUPA_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InV5d2RrZHZpdGNwZWp2dGZpeXlxIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Nzk4NTAwNjEsImV4cCI6MjA5NTQyNjA2MX0.US60mpp7o8xocVMTxQnivCPbgLV9mwcvfN7s59OS-xk';
+const sb = supabase.createClient(SUPA_URL, SUPA_KEY);
+let currentUser = null;
+let syncTimeout = null;
+
+// ── AUTH UI ──────────────────────────────────────
+function showView(v) {
+  ['Home','Builder','Upload','App','Auth'].forEach(n => {
+    document.getElementById('view'+n).style.display = n.toLowerCase()===v ? 'block' : 'none';
+  });
+  appState.view = v;
+  buildSidebar();
+}
+
+function renderAuthScreen(tab='signin') {
+  showView('auth');
+  document.getElementById('viewAuth').innerHTML = `
+  <div class="auth-screen">
+    <div class="auth-box">
+      <div class="auth-logo">⬡ LIFT</div>
+      <div class="auth-title">Welcome back</div>
+      <div class="auth-sub">Sign in to sync your training program across devices.</div>
+      <div class="auth-tabs">
+        <button class="auth-tab ${tab==='signin'?'active':''}" onclick="renderAuthScreen('signin')">Sign in</button>
+        <button class="auth-tab ${tab==='signup'?'active':''}" onclick="renderAuthScreen('signup')">Create account</button>
+      </div>
+      ${tab==='signin' ? `
+        <div class="auth-field"><label class="auth-label">Email</label><input class="auth-input" id="auth-email" type="email" placeholder="you@example.com" autocomplete="email"></div>
+        <div class="auth-field"><label class="auth-label">Password</label><input class="auth-input" id="auth-pass" type="password" placeholder="••••••••" autocomplete="current-password" onkeydown="if(event.key==='Enter')doSignIn()"></div>
+        <button class="auth-btn" onclick="doSignIn()">Sign in</button>
+        <div id="auth-err"></div>
+        <div class="auth-note">No account yet? <span style="color:var(--accent);cursor:pointer" onclick="renderAuthScreen('signup')">Create one free →</span></div>
+      ` : `
+        <div class="auth-field"><label class="auth-label">Email</label><input class="auth-input" id="auth-email" type="email" placeholder="you@example.com" autocomplete="email"></div>
+        <div class="auth-field"><label class="auth-label">Password <span style="color:var(--text3);font-weight:400">(min 6 chars)</span></label><input class="auth-input" id="auth-pass" type="password" placeholder="••••••••" autocomplete="new-password" onkeydown="if(event.key==='Enter')doSignUp()"></div>
+        <button class="auth-btn" onclick="doSignUp()">Create account</button>
+        <div id="auth-err"></div>
+        <div class="auth-note">Already have an account? <span style="color:var(--accent);cursor:pointer" onclick="renderAuthScreen('signin')">Sign in →</span></div>
+      `}
+      <div style="margin-top:18px;padding-top:18px;border-top:1px solid var(--border)">
+        <button class="btn-secondary" style="width:100%;justify-content:center;font-size:13px" onclick="continueOffline()">Continue without account →</button>
+        <div class="auth-note" style="margin-top:8px">Your data stays in the browser only.</div>
+      </div>
+    </div>
+  </div>`;
+  setTimeout(()=>{ const e=document.getElementById('auth-email'); if(e) e.focus(); },50);
+}
+
+async function doSignIn() {
+  const email=document.getElementById('auth-email').value.trim();
+  const pass=document.getElementById('auth-pass').value;
+  const btn=document.querySelector('.auth-btn'); btn.disabled=true; btn.textContent='Signing in…';
+  const {data:d,error}=await sb.auth.signInWithPassword({email,password:pass});
+  if(error){ showAuthError(error.message); btn.disabled=false; btn.textContent='Sign in'; return; }
+  await onSignedIn(d.user);
+}
+
+async function doSignUp() {
+  const email=document.getElementById('auth-email').value.trim();
+  const pass=document.getElementById('auth-pass').value;
+  if(pass.length<6){ showAuthError('Password must be at least 6 characters.'); return; }
+  const btn=document.querySelector('.auth-btn'); btn.disabled=true; btn.textContent='Creating account…';
+  const {data:d,error}=await sb.auth.signUp({email,password:pass});
+  if(error){ showAuthError(error.message); btn.disabled=false; btn.textContent='Create account'; return; }
+  // Supabase may require email confirmation — handle both cases
+  if(d.user && d.session){ await onSignedIn(d.user); }
+  else { showAuthError('Check your email for a confirmation link, then sign in.','info'); btn.disabled=false; btn.textContent='Create account'; }
+}
+
+function showAuthError(msg,type='error'){
+  const el=document.getElementById('auth-err');
+  if(!el)return;
+  el.innerHTML=`<div class="auth-error" style="${type==='info'?'color:var(--info);background:rgba(107,184,255,.08);border-color:rgba(107,184,255,.2)':''}">${esc(msg)}</div>`;
+}
+
+async function onSignedIn(user) {
+  currentUser = user;
+  await loadFromCloud();
+  buildSidebar();
+  if(data.length){ appState.tab='session'; goApp(); }
+  else { goHome(); }
+  toast(`Welcome${user.email ? ', '+user.email.split('@')[0] : ''}! 👋`);
+}
+
+function continueOffline() {
+  loadFromLocalStorage();
+  goHome();
+}
+
+async function doSignOut() {
+  await sb.auth.signOut();
+  currentUser = null;
+  data = []; appState.sets={}; appState.done={};
+  buildSidebar();
+  renderAuthScreen('signin');
+  toast('Signed out.');
+}
+
+// ── SIDEBAR USER PANEL ────────────────────────────
+function renderUserPanel() {
+  const el = document.getElementById('sbUser');
+  if(!el) return;
+  if(!currentUser){ el.style.display='none'; return; }
+  el.style.display='block';
+  const initials = (currentUser.email||'?').charAt(0).toUpperCase();
+  const email = currentUser.email||'';
+  el.innerHTML=`
+    <div class="sb-user-row">
+      <div class="sb-avatar">${initials}</div>
+      <div class="sb-user-email" title="${esc(email)}">${esc(email)}</div>
+      <button class="sb-signout" onclick="doSignOut()" title="Sign out">↩</button>
+    </div>
+    <div id="syncStatus" style="margin-top:7px"></div>`;
+}
+
+function setSyncStatus(state){
+  const el=document.getElementById('syncStatus'); if(!el)return;
+  if(state==='saved') el.innerHTML=`<span class="sync-badge">✓ Synced to cloud</span>`;
+  else if(state==='saving') el.innerHTML=`<span class="sync-badge saving">↑ Saving…</span>`;
+  else if(state==='offline') el.innerHTML=`<span class="sync-badge offline">○ Saved locally</span>`;
+  else el.innerHTML='';
+}
+
+// ── CLOUD SYNC ────────────────────────────────────
+async function loadFromCloud() {
+  if(!currentUser) return;
+  setSyncStatus('saving');
+  try {
+    const [{data:pd},{data:pr}] = await Promise.all([
+      sb.from('programs').select('data').eq('user_id',currentUser.id).maybeSingle(),
+      sb.from('progress').select('data').eq('user_id',currentUser.id).maybeSingle()
+    ]);
+    if(pd?.data){ data=pd.data; migratePerSetLoads(); }
+    else { loadFromLocalStorage(); }
+    if(pr?.data){ appState.sets=pr.data.sets||{}; appState.done=pr.data.done||{}; }
+    setSyncStatus('saved');
+  } catch(e){ loadFromLocalStorage(); setSyncStatus('offline'); }
+}
+
+async function saveAll() {
+  // Always save locally as fallback
+  try {
+    localStorage.setItem('lift_data', JSON.stringify(data));
+    localStorage.setItem('lift_progress', JSON.stringify({sets:appState.sets,done:appState.done}));
+  } catch(e){}
+
+  if(!currentUser){ setSyncStatus('offline'); return; }
+
+  // Debounce cloud saves — wait 800ms after last change
+  clearTimeout(syncTimeout);
+  setSyncStatus('saving');
+  syncTimeout = setTimeout(async ()=>{
+    try {
+      await Promise.all([
+        sb.from('programs').upsert({user_id:currentUser.id, data, updated_at:new Date().toISOString()},{onConflict:'user_id'}),
+        sb.from('progress').upsert({user_id:currentUser.id, data:{sets:appState.sets,done:appState.done}, updated_at:new Date().toISOString()},{onConflict:'user_id'})
+      ]);
+      setSyncStatus('saved');
+    } catch(e){ setSyncStatus('offline'); toast('Could not sync to cloud — saved locally.','warn'); }
+  }, 800);
+}
+
+function loadFromLocalStorage() {
+  try {
+    const d=localStorage.getItem('lift_data');
+    if(d){ data=JSON.parse(d); migratePerSetLoads(); }
+    const p=localStorage.getItem('lift_progress');
+    if(p){ const pp=JSON.parse(p); appState.sets=pp.sets||{}; appState.done=pp.done||{}; }
+  } catch(e){}
+}
+
+// ── OVERRIDING buildSidebar to include user panel ─
+const _buildSidebarOrig = buildSidebar;
+function buildSidebar() {
+  const v = appState.view;
+  const hasData = data.length > 0;
+  let html = `<div class="sb-label">Menu</div>`;
+  if (hasData) {
+    html += `<button class="sb-item ${v==='app'&&appState.tab==='session'?'active':''}" onclick="appState.tab='session';goApp()"><span class="sb-dot"></span>Session</button>
+    <button class="sb-item ${v==='app'&&appState.tab==='dashboard'?'active':''}" onclick="appState.tab='dashboard';goApp()"><span class="sb-dot"></span>Dashboard</button>
+    <button class="sb-item ${v==='app'&&appState.tab==='program'?'active':''}" onclick="appState.tab='program';goApp()"><span class="sb-dot"></span>Edit program</button>`;
+    html += `<div class="sb-divider"></div><div class="sb-label">Phases</div>`;
+    data.forEach((ph,i)=>{
+      html += `<button class="sb-item ${v==='app'&&appState.phase===i?'active':''}" onclick="appState.phase=${i};appState.day=0;appState.week=1;appState.tab='session';goApp()"><span class="sb-dot"></span>${ph.phaseName}</button>`;
+    });
+  }
+  html += `<div class="sb-divider"></div>
+    <button class="sb-item ${v==='home'?'active':''}" onclick="goHome()"><span class="sb-dot"></span>Home</button>`;
+  if(!currentUser){
+    html += `<button class="sb-item" onclick="renderAuthScreen('signin')"><span class="sb-dot" style="background:var(--accent)"></span>Sign in / Sign up</button>`;
+  }
+  document.getElementById('sbNav').innerHTML = html;
+  renderUserPanel();
+}
+
+// ══════════════════════════════════════════════════
+//  UTILS
+// ══════════════════════════════════════════════════
+function esc(s){ return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;'); }
+
+function toast(msg,type='ok'){
+  const el=document.getElementById('toast');
+  el.textContent=msg; el.className='toast show';
+  setTimeout(()=>{el.className='toast';},3200);
+}
+
+// backfill perSetLoads for programs saved before this field existed
+function migratePerSetLoads(){
+  data.forEach(ph=>ph.days&&ph.days.forEach(d=>d.exercises&&d.exercises.forEach(ex=>{
+    if(!ex.weekData)return;
+    ex.weekData.forEach(wd=>{
+      if(!wd.perSetLoads) wd.perSetLoads=parseRepsPerSet(wd.load,ex.numSets);
+    });
+  })));
+}
+
+// ══════════════════════════════════════════════════
+//  INIT
+// ══════════════════════════════════════════════════
+window.addEventListener('load', async ()=>{
+  // Check if already logged in (session persisted in localStorage by Supabase)
+  const {data:{session}} = await sb.auth.getSession();
+  if(session?.user){
+    currentUser = session.user;
+    await loadFromCloud();
+    buildSidebar();
+    if(data.length){ appState.tab='session'; goApp(); }
+    else { renderHome(); showView('home'); }
+    toast(`Welcome back, ${(session.user.email||'').split('@')[0]}! 👋`);
+  } else {
+    // Not logged in — show auth screen
+    renderAuthScreen('signin');
+  }
+
+  // Listen for auth state changes (e.g. email confirmation in another tab)
+  sb.auth.onAuthStateChange(async (event, session)=>{
+    if(event==='SIGNED_IN' && session?.user && !currentUser){
+      await onSignedIn(session.user);
+    } else if(event==='SIGNED_OUT'){
+      currentUser=null; buildSidebar();
+    }
+  });
+});
+</script>
+</body>
+</html>
