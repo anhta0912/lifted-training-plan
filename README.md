@@ -6,7 +6,7 @@ Lift allows users to either create a training plan directly in the app or upload
 
 ## Live Demo
 
-View the deployed version here: gym-training-plan.netlify.app
+View the deployed version here: https://gym-training-plan.netlify.app/
 
 ## Project Overview
 
